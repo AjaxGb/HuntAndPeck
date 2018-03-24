@@ -5,14 +5,14 @@ function KeyCap(scene, x, y, width, text, fontSize) {
 	
 	this.sprites = [
 		scene.add.sprite(x, y, "key-sliced", 0),
-		scene.add.sprite(x + 10, y, "key-sliced", 1),
-		scene.add.sprite(x + width - 10, y, "key-sliced", 2),
+		scene.add.sprite(x + 8, y, "key-sliced", 1),
+		scene.add.sprite(x + width - 8, y, "key-sliced", 2),
 	];
 	this.sprites[0].setOrigin(0, 0);
-	this.sprites[1].setOrigin(0, 0).displayWidth = width - 20;
+	this.sprites[1].setOrigin(0, 0).displayWidth = width - 16;
 	this.sprites[2].setOrigin(0, 0);
 	
-	this.text = scene.add.text(x + 10, y + 5, text, {
+	this.text = scene.add.text(x + 7, y + 2, text, {
 		color: "#000",
 		fixedWidth: 100,
 		align: "right",
@@ -64,17 +64,17 @@ function Keyboard(scene, startX, startY, layout, keys) {
 			xPos += keyData.width + 2;
 		}
 		
-		yPos += 26;
+		yPos += 20;
 	}
 }
 Keyboard.keys = {
-	default: { width: 30 },
-	T: { text: "Tab",    width: 40, smallFont: true },
-	"\\": { width: 38 },
-	U: { text: "CpsLck", width: 55, smallFont: true },
-	S: { text: "Shift",  width: 70, smallFont: true },
-	$: { text: "Shift",  width: 72, smallFont: true },
-	E: { text: "Enter",  width: 55, smallFont: true },
+	default: { width: 24 },
+	T: { text: "Tab",    width: 36, smallFont: true },
+	"\\": { width: 28 },
+	U: { text: "CpsLck", width: 44, smallFont: true },
+	S: { text: "Shift",  width: 56, smallFont: true },
+	E: { text: "Enter",  width: 46, smallFont: true },
+	$: { text: "Shift",  width: 60, smallFont: true },
 };
 Keyboard.layouts = {
 	qwerty: {
@@ -88,9 +88,12 @@ Keyboard.layouts = {
 
 var game = new Phaser.Game({
 	type: Phaser.AUTO,
-	width: 550,
+	width: 600,
 	height: 350,
 	zoom: 2,
+	
+	pixelArt: true,
+	roundPixels: true,
 	
 	scene: [
 		{
@@ -105,15 +108,53 @@ var game = new Phaser.Game({
 				this.load
 					.image("finger", "finger.png")
 					.spritesheet("key-sliced", "key-0-y.png", {
-						frameWidth:  10,
-						frameHeight: 30,
+						frameWidth:  8,
+						frameHeight: 24,
 					});
 			},
 			create: function() {
-				window.keyboard = new Keyboard(this, 5, 5);
+				var scene = this;
+				
+				window.keyboard = new Keyboard(this, 90, 250);
+				
+				window.finger = this.add.sprite(30, 200, "finger");
+				finger.setOrigin(0, 1);
+				finger.setInteractive();
+				
+				this.realUp = this.input.keyboard.addKey(
+					Phaser.Input.Keyboard.KeyCodes.UP);
+				this.realDown = this.input.keyboard.addKey(
+					Phaser.Input.Keyboard.KeyCodes.DOWN);
+				this.realLeft = this.input.keyboard.addKey(
+					Phaser.Input.Keyboard.KeyCodes.LEFT);
+				this.realRight = this.input.keyboard.addKey(
+					Phaser.Input.Keyboard.KeyCodes.RIGHT);
 			},
+			update: function(now, elapsed) {
+				elapsed = elapsed / 1000;
+				var dx = 0;
+				var dy = 0;
+				
+				if (this.realUp.isDown) dy -= 20;
+				if (this.realDown.isDown) dy += 20;
+				if (this.realLeft.isDown) dx -= 30;
+				if (this.realRight.isDown) dx += 30;
+				
+				if (!dx) {
+					finger.x = Math.round(finger.x);
+				}
+				if (!dy) {
+					finger.y = Math.round(finger.y);
+				}
+				if (dx && dy) {
+					dx *= Math.SQRT1_2;
+					dy *= Math.SQRT1_2;
+				}
+				
+				finger.x += elapsed * dx;
+				finger.y += elapsed * dy;
+				
+			}
 		},
 	],
-	
-	pixelArt: true,
 });
