@@ -1,25 +1,90 @@
-var qwerty = [
-	"Tqwertyuiop[]\\",
-	"Uasdfghjkl;'E",
-	"Szxcvbnm,./S",
-];
-var special = {
-	T: { text: "Tab",      extraW: 10, sprite: 1 },
-	U: { text: "CpsLck",   extraW: 25, sprite: 2 },
-	S: { text: "Shift",    extraW: 40, sprite: 3 },
-	E: { text: "Enter",    extraW: 25, sprite: 2 },
-};
-var keyWidths = [30, 40, 55, 70];
+"using strict";
 
-var KeyCap = new Phaser.Class({
-	Extends: Phaser.GameObjects.Group,
+function KeyCap(scene, x, y, width, text, fontSize) {
+	width = (width|0) || 30;
 	
-	initialize: function KeyCap(scene, x, y, key) {
-		Phaser.GameObjects.Group.call(this, scene);
-		
-		this.create(0, 0, "key-0-y");
+	this.sprites = [
+		scene.add.sprite(x, y, "key-sliced", 0),
+		scene.add.sprite(x + 10, y, "key-sliced", 1),
+		scene.add.sprite(x + width - 10, y, "key-sliced", 2),
+	];
+	this.sprites[0].setOrigin(0, 0);
+	this.sprites[1].setOrigin(0, 0).displayWidth = width - 20;
+	this.sprites[2].setOrigin(0, 0);
+	
+	this.text = scene.add.text(x + 10, y + 5, text, {
+		color: "#000",
+		fixedWidth: 100,
+		align: "right",
+		fontSize: fontSize,
+	});
+	
+	this.pressed = false;
+}
+KeyCap.prototype.setPressed = function(pressed) {
+	pressed = !!pressed;
+	if (this.pressed === pressed) return;
+	
+	var frameOffset;
+	if (pressed) {
+		frameOffset = 3;
+		this.text.y += 4;
+	} else {
+		frameOffset = 0;
+		this.text.y -= 4;
 	}
-});
+	
+	for (var i = 0; i < 3; i++) {
+		this.sprites[i].setFrame(i + frameOffset);
+	}
+	
+	this.pressed = pressed;
+};
+
+function Keyboard(scene, startX, startY, layout, keys) {
+	layout = layout || Keyboard.layouts.qwerty;
+	keys = keys || Keyboard.keys;
+	
+	this.scene = scene;
+	this.keys = [];
+	
+	var yPos = startY;
+	for (var y = 0; y < layout.keys.length; y++) {
+		var xPos = startX;
+		
+		for (var x = 0; x < layout.keys[y].length; x++) {
+			var keyName = layout.keys[y][x];
+			var keyData = keys[keyName] || keys.default;
+			
+			this.keys.push(new KeyCap(scene, xPos, yPos,
+				keyData.width,
+				keyData.text || keyName.toUpperCase(),
+				keyData.smallFont ? "10px" : "16px"));
+			
+			xPos += keyData.width + 2;
+		}
+		
+		yPos += 26;
+	}
+}
+Keyboard.keys = {
+	default: { width: 30 },
+	T: { text: "Tab",    width: 40, smallFont: true },
+	"\\": { width: 38 },
+	U: { text: "CpsLck", width: 55, smallFont: true },
+	S: { text: "Shift",  width: 70, smallFont: true },
+	$: { text: "Shift",  width: 72, smallFont: true },
+	E: { text: "Enter",  width: 55, smallFont: true },
+};
+Keyboard.layouts = {
+	qwerty: {
+		keys: [
+			"Tqwertyuiop[]\\",
+			"Uasdfghjkl;'E",
+			"Szxcvbnm,./$",
+		],
+	}
+};
 
 var game = new Phaser.Game({
 	type: Phaser.AUTO,
@@ -37,41 +102,13 @@ var game = new Phaser.Game({
 			preload: function() {
 				this.load.setBaseURL("sprites");
 				
-				for (var i = 0; i <= 3; ++i) {
-					this.load.spritesheet("key-"+i+"-g", "key-"+i+"-g.png", {
-						frameWidth:  keyWidths[i],
-						frameHeight: 30,
-					}).spritesheet("key-"+i+"-y", "key-"+i+"-y.png", {
-						frameWidth:  keyWidths[i],
-						frameHeight: 30,
-					});
-				}
+				this.load.spritesheet("key-sliced", "key-0-y.png", {
+					frameWidth:  10,
+					frameHeight: 30,
+				});
 			},
 			create: function() {
-				for (var y = 0; y < qwerty.length; ++y) {
-					var xPos = 5;
-					for (var x = 0; x < qwerty[y].length; ++x) {
-						var key = qwerty[y][x];
-						var data = special[key] || {
-							text: key.toUpperCase(),
-							extraW: 0,
-							sprite: 0,
-							normal: true,
-						};
-						var width = 32 + data.extraW;
-						
-						var cap = this.add.sprite(xPos, 5 + y * 26, "key-"+data.sprite+"-y");
-						cap.setOrigin(0, 0);
-						window.cap = cap;
-						window.text = this.add.text(xPos + 10, 10 + y * 26, data.text, {
-							color: "#000",
-							fixedWidth: 100,
-							align: "right",
-							fontSize: data.normal ? "16px" : "10px",
-						});
-						xPos += width;
-					}
-				}
+				window.keyboard = new Keyboard(this, 5, 5);
 			},
 		},
 	],
