@@ -102,10 +102,12 @@ var game = new Phaser.Game({
 			preload: function() {
 				this.load.setBaseURL("sprites");
 				
-				this.load.spritesheet("key-sliced", "key-0-y.png", {
-					frameWidth:  10,
-					frameHeight: 30,
-				});
+				this.load
+					.image("finger", "finger.png")
+					.spritesheet("key-sliced", "key-0-y.png", {
+						frameWidth:  10,
+						frameHeight: 30,
+					});
 			},
 			create: function() {
 				window.keyboard = new Keyboard(this, 5, 5);
