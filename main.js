@@ -1,5 +1,9 @@
 "using strict";
 
+Math.clamp = function(a, b, x) {
+	return Math.max(a, Math.min(b, x));
+};
+
 function KeyCap(scene, x, y, width, text, fontSize) {
 	width = (width|0) || 30;
 	
@@ -115,11 +119,21 @@ var game = new Phaser.Game({
 			create: function() {
 				var scene = this;
 				
+				this.bounds = { l: 0, t: 0, r: 600, b: 350 };
+				
 				window.keyboard = new Keyboard(this, 90, 250);
 				
 				window.finger = this.add.sprite(30, 200, "finger");
-				finger.setOrigin(0, 1);
+				finger.setOrigin(0.73, 1);
 				finger.setInteractive();
+				finger.update = fingerUpdate;
+				finger.velX = 0;
+				finger.velY = 0;
+				finger.maxVelX = 70;
+				finger.maxVelY = 50;
+				finger.accelX = 10;
+				finger.accelY = 7;
+				finger.drag = 0.5;
 				
 				this.realUp = this.input.keyboard.addKey(
 					Phaser.Input.Keyboard.KeyCodes.UP);
@@ -131,30 +145,63 @@ var game = new Phaser.Game({
 					Phaser.Input.Keyboard.KeyCodes.RIGHT);
 			},
 			update: function(now, elapsed) {
-				elapsed = elapsed / 1000;
-				var dx = 0;
-				var dy = 0;
 				
-				if (this.realUp.isDown) dy -= 20;
-				if (this.realDown.isDown) dy += 20;
-				if (this.realLeft.isDown) dx -= 30;
-				if (this.realRight.isDown) dx += 30;
-				
-				if (!dx) {
-					finger.x = Math.round(finger.x);
-				}
-				if (!dy) {
-					finger.y = Math.round(finger.y);
-				}
-				if (dx && dy) {
-					dx *= Math.SQRT1_2;
-					dy *= Math.SQRT1_2;
-				}
-				
-				finger.x += elapsed * dx;
-				finger.y += elapsed * dy;
-				
+				finger.update(now, elapsed);
 			}
 		},
 	],
 });
+
+function fingerUpdate(now, elapsed) {
+	elapsed /= 1000;
+	
+	var dx = 0;
+	var dy = 0;
+	
+	if (this.scene.realUp.isDown) dy -= 1;
+	if (this.scene.realDown.isDown) dy += 1;
+	if (this.scene.realLeft.isDown) dx -= 1;
+	if (this.scene.realRight.isDown) dx += 1;
+	
+	if (dx && dy) {
+		dx *= Math.SQRT1_2;
+		dy *= Math.SQRT1_2;
+	}
+	
+	if (dx) {
+		finger.velX = Math.clamp(
+			-finger.maxVelX, finger.maxVelX,
+			finger.velX + elapsed * dx * finger.accelX);
+	} else {
+		finger.velX -= elapsed * finger.velX * finger.drag;
+		if (Math.abs(finger.velX) < 0.1) finger.velX = 0;
+	}
+	
+	if (dy) {
+		finger.velY = Math.clamp(
+			-finger.maxVelY, finger.maxVelY,
+			finger.velY + elapsed * dy * finger.accelY);
+	} else {
+		finger.velY -= elapsed * finger.velY * finger.drag;
+		if (Math.abs(finger.velY) < 0.1) finger.velY = 0;
+	}
+	
+	finger.x += finger.velX;
+	if (finger.x < this.scene.bounds.l) {
+		finger.x = this.scene.bounds.l;
+		finger.velX = 0;
+	}
+	if (finger.x > this.scene.bounds.r) {
+		finger.x = this.scene.bounds.r;
+		finger.velX = 0;
+	}
+	finger.y += finger.velY;
+	if (finger.y < this.scene.bounds.t) {
+		finger.y = this.scene.bounds.t;
+		finger.velY = 0;
+	}
+	if (finger.y > this.scene.bounds.b) {
+		finger.y = this.scene.bounds.b;
+		finger.velY = 0;
+	}
+}
