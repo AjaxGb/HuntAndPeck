@@ -1,3 +1,6 @@
 [submodule "phaser"]
 	path = phaser
 	url = https://github.com/photonstorm/phaser/
+[submodule "phaser-nineslice"]
+	path = phaser-nineslice
+	url = https://github.com/orange-games/phaser-nineslice
