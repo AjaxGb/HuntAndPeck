@@ -2,7 +2,20 @@
 <html>
 <head>
 	<title>Hunt-and-Peck</title>
-	<script src="phaser/dist/phaser.min.js"></script>
+	<script src="phaser/build/phaser.js"></script>
+	<script src="phaser-nineslice/build/phaser-nineslice.js"></script>
+	<style>
+		canvas {
+			image-rendering: optimizeSpeed;
+			-ms-interpolation-mode: nearest-neighbor;
+			image-rendering: -moz-crisp-edges;
+			image-rendering: -o-crisp-edges;
+			image-rendering: -webkit-optimize-contrast;
+			image-rendering: optimize-contrast;
+			image-rendering: crisp-edges;
+			image-rendering: pixelated;
+		}
+	</style>
 </head>
 <body>
 	<script src="main.js"></script>

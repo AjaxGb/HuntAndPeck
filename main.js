@@ -4,52 +4,58 @@ Math.clamp = function(a, b, x) {
 	return Math.max(a, Math.min(b, x));
 };
 
-function KeyCap(scene, x, y, width, text, fontSize) {
-	width = (width|0) || 30;
-	
-	this.sprites = [
-		scene.add.sprite(x, y, "key-sliced", 0),
-		scene.add.sprite(x + 8, y, "key-sliced", 1),
-		scene.add.sprite(x + width - 8, y, "key-sliced", 2),
-	];
-	this.sprites[0].setOrigin(0, 0);
-	this.sprites[1].setOrigin(0, 0).displayWidth = width - 16;
-	this.sprites[2].setOrigin(0, 0);
-	
-	this.text = scene.add.text(x + 7, y + 2, text, {
-		color: "#000",
-		fixedWidth: 100,
-		align: "right",
-		fontSize: fontSize,
+function KeyCap(game, x, y, width, text, fontSize) {
+	PhaserNineSlice.NineSlice.call(this, game, x, y, "key-y", 0, width, 24, {
+		top: 0,
+		bottom: 0,
+		left: 3,
+		right: 3,
 	});
 	
+	this.text = this.addChild(game.make.text(0, 0, text, {
+		color: "#000",
+		fixedWidth: 100,
+		boundsAlignH: "center",
+		boundsAlignV: "middle",
+		fontSize: fontSize,
+	}).setTextBounds(0, 0, width, 24));
+	
 	this.pressed = false;
+	
+	this.aabb = { l: 0, r: width, t: 4, b: 24};
 }
+KeyCap.prototype = Object.create(PhaserNineSlice.NineSlice.prototype);
+KeyCap.prototype.constructor = KeyCap;
+
 KeyCap.prototype.setPressed = function(pressed) {
 	pressed = !!pressed;
 	if (this.pressed === pressed) return;
 	
-	var frameOffset;
+	// Save render texture for later
+	var renderTexture = this.texture;
+	
 	if (pressed) {
-		frameOffset = 3;
+		this.loadTexture("key-y", 1);
 		this.text.y += 4;
 	} else {
-		frameOffset = 0;
+		this.loadTexture("key-y", 0);
 		this.text.y -= 4;
 	}
+	this.baseTexture = this.texture.baseTexture;
+	this.baseFrame = this.texture.frame;
 	
-	for (var i = 0; i < 3; i++) {
-		this.sprites[i].setFrame(i + frameOffset);
-	}
+	// Put render texture back
+	this.loadTexture(renderTexture);
+	this.renderTexture();
 	
 	this.pressed = pressed;
 };
 
-function Keyboard(scene, startX, startY, layout, keys) {
+function Keyboard(group, startX, startY, layout, keys) {
 	layout = layout || Keyboard.layouts.qwerty;
 	keys = keys || Keyboard.keys;
 	
-	this.scene = scene;
+	this.group = group;
 	this.keys = [];
 	
 	var yPos = startY;
@@ -60,10 +66,12 @@ function Keyboard(scene, startX, startY, layout, keys) {
 			var keyName = layout.keys[y][x];
 			var keyData = keys[keyName] || keys.default;
 			
-			this.keys.push(new KeyCap(scene, xPos, yPos,
-				keyData.width,
-				keyData.text || keyName.toUpperCase(),
-				keyData.smallFont ? "10px" : "16px"));
+			this.keys.push(
+				group.add(
+					new KeyCap(group.game, xPos, yPos,
+						keyData.width,
+						keyData.text || keyName.toUpperCase(),
+						keyData.smallFont ? "10px" : "16px")));
 			
 			xPos += keyData.width + 2;
 		}
@@ -90,78 +98,75 @@ Keyboard.layouts = {
 	}
 };
 
-var game = new Phaser.Game({
-	type: Phaser.AUTO,
-	width: 600,
-	height: 350,
-	zoom: 2,
-	
-	pixelArt: true,
-	roundPixels: true,
-	
-	scene: [
-		{
-			key: "virtual",
-		},
-		{
-			key: "desk",
-			active: true,
-			preload: function() {
-				this.load.setBaseURL("sprites");
-				
-				this.load
-					.image("finger", "finger.png")
-					.spritesheet("key-sliced", "key-0-y.png", {
-						frameWidth:  8,
-						frameHeight: 24,
-					});
-			},
-			create: function() {
-				var scene = this;
-				
-				this.bounds = { l: 0, t: 0, r: 600, b: 350 };
-				
-				window.keyboard = new Keyboard(this, 90, 250);
-				
-				window.finger = this.add.sprite(30, 200, "finger");
-				finger.setOrigin(0.73, 1);
-				finger.setInteractive();
-				finger.update = fingerUpdate;
-				finger.velX = 0;
-				finger.velY = 0;
-				finger.maxVelX = 70;
-				finger.maxVelY = 50;
-				finger.accelX = 10;
-				finger.accelY = 7;
-				finger.drag = 0.5;
-				
-				this.realUp = this.input.keyboard.addKey(
-					Phaser.Input.Keyboard.KeyCodes.UP);
-				this.realDown = this.input.keyboard.addKey(
-					Phaser.Input.Keyboard.KeyCodes.DOWN);
-				this.realLeft = this.input.keyboard.addKey(
-					Phaser.Input.Keyboard.KeyCodes.LEFT);
-				this.realRight = this.input.keyboard.addKey(
-					Phaser.Input.Keyboard.KeyCodes.RIGHT);
-			},
-			update: function(now, elapsed) {
-				
-				finger.update(now, elapsed);
-			}
-		},
-	],
-});
+var desk3D, keyboard, finger;
+var fingerBounds = { l: 0, t: 0, r: 600, b: 350 };
+var realKeys, hover = [];
 
-function fingerUpdate(now, elapsed) {
-	elapsed /= 1000;
+var game = new Phaser.Game(600, 350, Phaser.AUTO, document.body, {
+	preload: function() {
+		game.plugins.add(PhaserNineSlice.Plugin);
+		
+		game.load.path = "sprites/";
+		
+		game.load
+			.image("finger", "finger.png")
+			.spritesheet("key-y", "key-0-y.png", 24, 24);
+	},
+	create: function() {
+		game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;
+		game.scale.setUserScale(2, 2);
+		
+		desk3D = game.add.group();
+		
+		keyboard = new Keyboard(desk3D, 90, 250);
+		
+		finger = desk3D.create(30, 200, "finger");
+		finger.anchor.set(0.73, 1);
+		finger.update = fingerUpdate;
+		finger.velX = 0;
+		finger.velY = 0;
+		finger.maxVelX = 70;
+		finger.maxVelY = 50;
+		finger.maxAccelX = 10;
+		finger.maxAccelY = 7;
+		finger.drag = 1.2;
+		finger.aabb = { l: -7, t: -6, r: 7, b: 0 };
+		
+		realKeys = game.input.keyboard.addKeys({
+			up: Phaser.KeyCode.UP,
+			down: Phaser.KeyCode.DOWN,
+			left: Phaser.KeyCode.LEFT,
+			right: Phaser.KeyCode.RIGHT,
+			interact: Phaser.KeyCode.SPACE,
+		});
+	},
+	update: function() {
+		
+		for (var hovered of hover) {
+			hovered.setPressed(false);
+		}
+		hover = [];
+		for (var key of keyboard.keys) {
+			if (aabbCollide(key.x, key.y, key.aabb,
+				finger.x, finger.y, finger.aabb)) {
+				
+				key.setPressed(true);
+				hover.push(key);
+			}
+		}
+	}
+}, false, false);
+
+function fingerUpdate() {
+	var elapsed = game.time.elapsed /= 1000;
 	
 	var dx = 0;
 	var dy = 0;
 	
-	if (this.scene.realUp.isDown) dy -= 1;
-	if (this.scene.realDown.isDown) dy += 1;
-	if (this.scene.realLeft.isDown) dx -= 1;
-	if (this.scene.realRight.isDown) dx += 1;
+	if (realKeys.up.isDown) dy -= 1;
+	if (realKeys.down.isDown) dy += 1;
+	if (realKeys.left.isDown) dx -= 1;
+	if (realKeys.right.isDown) dx += 1;
 	
 	if (dx && dy) {
 		dx *= Math.SQRT1_2;
@@ -169,39 +174,56 @@ function fingerUpdate(now, elapsed) {
 	}
 	
 	if (dx) {
-		finger.velX = Math.clamp(
-			-finger.maxVelX, finger.maxVelX,
-			finger.velX + elapsed * dx * finger.accelX);
+		this.velX = Math.clamp(
+			-this.maxVelX, this.maxVelX,
+			this.velX + elapsed * dx * this.maxAccelX);
 	} else {
-		finger.velX -= elapsed * finger.velX * finger.drag;
-		if (Math.abs(finger.velX) < 0.1) finger.velX = 0;
+		this.velX -= elapsed * this.velX * this.drag;
+		if (Math.abs(this.velX) < 0.1) this.velX = 0;
 	}
 	
 	if (dy) {
-		finger.velY = Math.clamp(
-			-finger.maxVelY, finger.maxVelY,
-			finger.velY + elapsed * dy * finger.accelY);
+		this.velY = Math.clamp(
+			-this.maxVelY, this.maxVelY,
+			this.velY + elapsed * dy * this.maxAccelY);
 	} else {
-		finger.velY -= elapsed * finger.velY * finger.drag;
-		if (Math.abs(finger.velY) < 0.1) finger.velY = 0;
+		this.velY -= elapsed * this.velY * this.drag;
+		if (Math.abs(this.velY) < 0.1) this.velY = 0;
 	}
 	
-	finger.x += finger.velX;
-	if (finger.x < this.scene.bounds.l) {
-		finger.x = this.scene.bounds.l;
-		finger.velX = 0;
+	this.x += this.velX;
+	if (this.x < fingerBounds.l) {
+		this.x = fingerBounds.l;
+		this.velX = 0;
 	}
-	if (finger.x > this.scene.bounds.r) {
-		finger.x = this.scene.bounds.r;
-		finger.velX = 0;
+	if (this.x > fingerBounds.r) {
+		this.x = fingerBounds.r;
+		this.velX = 0;
 	}
-	finger.y += finger.velY;
-	if (finger.y < this.scene.bounds.t) {
-		finger.y = this.scene.bounds.t;
-		finger.velY = 0;
+	this.y += this.velY;
+	if (this.y < fingerBounds.t) {
+		this.y = fingerBounds.t;
+		this.velY = 0;
 	}
-	if (finger.y > this.scene.bounds.b) {
-		finger.y = this.scene.bounds.b;
-		finger.velY = 0;
+	if (this.y > fingerBounds.b) {
+		this.y = fingerBounds.b;
+		this.velY = 0;
 	}
+	
+	this.depth = this.y;
+}
+
+function aabbCollide(x1, y1, rect1, x2, y2, rect2) {
+	return (
+		x1 + rect1.l < x2 + rect2.r &&
+		x1 + rect1.r > x2 + rect2.l &&
+		y1 + rect1.t < y2 + rect2.b &&
+		y1 + rect1.b > y2 + rect2.t);
+}
+function aabbCollidePoint(x1, y1, rect1, x2, y2) {
+	return (
+		x1 + rect1.l < x2 &&
+		x1 + rect1.r > x2 &&
+		y1 + rect1.t < y2 &&
+		y1 + rect1.b > y2);
 }
