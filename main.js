@@ -86,9 +86,16 @@ function Keyboard(group, startX, startY, layout, keys) {
 			var label = keyData.text || keyName.toUpperCase();
 			
 			var decal;
+			// if (keyData.smallFont) {
+			// 	decal = game.make.retroFont("small-font", 6, 9,
+			// 		Phaser.RetroFont.TEXT_SET1, 19);
 				
+			// 	decal.autoUpperCase = false;
+			// 	decal.text = label;
+			// } else {
 				decal = game.make.image(0, 0, "key-font",
 					keyFontChars.indexOf(label));
+			// }
 			
 			this.keys.push(
 				group.add(
