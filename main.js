@@ -5,6 +5,10 @@ Math.clamp = function(a, b, x) {
 };
 
 function KeyCap(game, x, y, width, decal, active) {
+	x |= 0;
+	y |= 0;
+	width |= 0;
+	
 	PhaserNineSlice.NineSlice.call(this, game, x, y,
 		active ? "key-y" : "key-g", 0, width, 24, {
 			top: 0,
@@ -14,6 +18,10 @@ function KeyCap(game, x, y, width, decal, active) {
 		});
 	
 	this.decal = this.addChild(decal);
+	decal.anchor.set(0.5, 0.5);
+	decal.x = (width / 2)|0;
+	decal.y = 9;
+	decal.tint = active ? 0x200000 : 0x222034;
 	
 	this.pressed = false;
 	this.active = active;
@@ -47,9 +55,11 @@ KeyCap.prototype.setActive = function(active) {
 	if (this.active === active) return;
 	
 	if (active) {
-		this.setSlicedTexture("key-y", +pressed);
+		this.setSlicedTexture("key-y", +this.pressed);
+		this.decal.tint = 0x160000;
 	} else {
-		this.setSlicedTexture("key-g", +pressed);
+		this.setSlicedTexture("key-g", +this.pressed);
+		this.decal.tint = 0x222034;
 	}
 	
 	this.active = active;
@@ -81,21 +91,40 @@ function Keyboard(group, startX, startY, layout, keys) {
 		var xPos = startX;
 		
 		for (var x = 0; x < layout.keys[y].length; x++) {
-			var keyName = layout.keys[y][x];
-			var keyData = keys[keyName] || keys.default;
-			var label = keyData.text || keyName.toUpperCase();
+			var keyID = layout.keys[y][x];
+			
+			if (keyID === "{") {
+				var stop = layout.keys[y].indexOf("}", x);
+				if (stop < 0) break;
+				xPos += layout.keys[y].substring(x + 1, stop)|0;
+				x = stop;
+				continue;
+			}
+			
+			var keyData = keys[keyID] || keys.default;
 			
 			var decal;
-			// if (keyData.smallFont) {
-			// 	decal = game.make.retroFont("small-font", 6, 9,
-			// 		Phaser.RetroFont.TEXT_SET1, 19);
+			
+			switch (keyData.special) {
+			case "word":
+				var font = game.add.retroFont("small-font", 6, 9,
+					Phaser.RetroFont.TEXT_SET1, 19);
 				
-			// 	decal.autoUpperCase = false;
-			// 	decal.text = label;
-			// } else {
+				font.autoUpperCase = false;
+				font.text = keyData.word;
+				
+				decal = game.make.image(0, 0, font);
+				break;
+				
+			case "icon":
+				decal = game.make.image(0, 0, keyData.icon, keyData.frame);
+				break;
+				
+			default:
 				decal = game.make.image(0, 0, "key-font",
-					keyFontChars.indexOf(label));
-			// }
+					keyFontChars.indexOf(keyData.char || keyID.toUpperCase()));
+				break;
+			}
 			
 			this.keys.push(
 				group.add(
@@ -110,29 +139,46 @@ function Keyboard(group, startX, startY, layout, keys) {
 }
 Keyboard.keys = {
 	default: { width: 24 },
-	T: { text: "Tab",    width: 36, smallFont: true },
+	M:    { width: 36, special: "word", word: "Esc"    },
+	"Q":  { width: 24, special: "icon", icon: "special-keys", frame: 0 },
+	B:    { width: 40, special: "word", word: "Bckspc" },
+	T:    { width: 36, special: "word", word: "Tab"    },
 	"\\": { width: 28 },
-	U: { text: "CpsLck", width: 44, smallFont: true },
-	S: { text: "Shift",  width: 56, smallFont: true },
-	E: { text: "Enter",  width: 46, smallFont: true },
-	$: { text: "Shift",  width: 60, smallFont: true },
+	U:    { width: 44, special: "word", word: "CpsLck" },
+	S:    { width: 56, special: "word", word: "Shift"  },
+	E:    { width: 46, special: "word", word: "Enter"  },
+	$:    { width: 60, special: "word", word: "Shift"  },
+	C:    { width: 38, special: "word", word: "Ctrl"   },
+	H:    { width: 24, special: "icon", icon: "special-keys", frame: 1 },
+	A:    { width: 24, special: "word", word: "Alt"    },
+	_:    { width: 130, char: " " },
+	P:    { width: 28, special: "word", word: "PgUp"   },
+	N:    { width: 28, special: "word", word: "PgDn"   },
+	"<":  { width: 28, special: "icon", icon: "special-keys", frame: 4 },
+	">":  { width: 28, special: "icon", icon: "special-keys", frame: 5 },
+	"^":  { width: 28, special: "icon", icon: "special-keys", frame: 6 },
+	"D":  { width: 28, special: "icon", icon: "special-keys", frame: 7 },
 };
 Keyboard.layouts = {
 	qwerty: {
 		keys: [
+			"M",
+			"`1234567890-=B",
 			"Tqwertyuiop[]\\",
 			"Uasdfghjkl;'E",
 			"Szxcvbnm,./$",
+			"CHA_ACP^N",
+			"{290}<D>",
 		],
 	}
 };
 
-var desk3D, keyboard, finger;
+var keyboardBack, desk3D, keyboard, finger;
 var fingerBounds = { l: 0, t: 0, r: 600, b: 350 };
 var realIn, hover = [];
 var keyFontChars = Phaser.RetroFont.TEXT_SET1;
 
-var game = new Phaser.Game(600, 350, Phaser.AUTO, document.body, {
+var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 	preload: function() {
 		game.scale.scaleMode = Phaser.ScaleManager.USER_SCALE;
 		game.scale.setUserScale(2, 2);
@@ -143,17 +189,23 @@ var game = new Phaser.Game(600, 350, Phaser.AUTO, document.body, {
 		
 		game.load
 			.image("finger", "finger.png")
+			.image("keyboard-back", "keyboard-back.png")
 			.spritesheet("key-font", "key-font.png", 12, 12)
+			.spritesheet("special-keys", "special-keys.png", 12, 12)
 			.spritesheet("small-font", "small-font.png", 6, 9)
 			.spritesheet("key-y", "key-y.png", 24, 24)
 			.spritesheet("key-g", "key-g.png", 24, 24);
 	},
 	create: function() {
+		game.renderer.renderSession.roundPixels = true;
 		game.stage.backgroundColor = 0x990000;
 		
+		keyboardBack = game.add.image(80, 0, "keyboard-back");
 		desk3D = game.add.group();
 		
-		keyboard = new Keyboard(desk3D, 90, 250);
+		keyboard = new Keyboard(desk3D, 87, 190);
+		for (var k of keyboard.keys)
+			if (Math.random() > 0.6) k.setActive(true);
 		
 		finger = desk3D.create(30, 200, "finger");
 		finger.anchor.set(0.73, 1);
