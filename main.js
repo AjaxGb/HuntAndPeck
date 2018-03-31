@@ -42,9 +42,11 @@ KeyCap.prototype.setPressed = function(pressed) {
 	if (pressed) {
 		this.setSlicedTexture(this.active ? "key-y" : "key-g", 1);
 		this.decal.y += 4;
+		keyDownSound.play();
 	} else {
 		this.setSlicedTexture(this.active ? "key-y" : "key-g", 0);
 		this.decal.y -= 4;
+		keyUpSound.play();
 	}
 	
 	this.pressed = pressed;
@@ -85,6 +87,8 @@ function Keyboard(group, startX, startY, layout, keys) {
 	
 	this.group = group;
 	this.keys = [];
+	this.ids = {};
+	this.pushed = {};
 	
 	var yPos = startY;
 	for (var y = 0; y < layout.keys.length; y++) {
@@ -173,9 +177,10 @@ Keyboard.layouts = {
 	}
 };
 
-var keyboardBack, desk3D, keyboard, finger;
+var keyboardBack, desk3D, keyboard, finger, fingerShadow, screenGroup;
 var fingerBounds = { l: 0, t: 0, r: 600, b: 350 };
-var realIn, hover = [];
+var realIn;
+var keyDownSound, keyUpSound;
 var keyFontChars = Phaser.RetroFont.TEXT_SET1;
 
 var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
@@ -190,17 +195,39 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		game.load
 			.image("finger", "finger.png")
 			.image("keyboard-back", "keyboard-back.png")
+			.image("wood").image("wall").image("shadow-small")
 			.spritesheet("key-font", "key-font.png", 12, 12)
 			.spritesheet("special-keys", "special-keys.png", 12, 12)
 			.spritesheet("small-font", "small-font.png", 6, 9)
 			.spritesheet("key-y", "key-y.png", 24, 24)
 			.spritesheet("key-g", "key-g.png", 24, 24);
+		
+		game.load.path = "audio/";
+		
+		game.load
+			.audio("keydown", ["keydown.mp3", "keydown.ogg"])
+			.audio("keyup", ["keyup.mp3", "keyup.ogg"]);
 	},
 	create: function() {
 		game.renderer.renderSession.roundPixels = true;
-		game.stage.backgroundColor = 0x990000;
+		
+		game.add.tileSprite(0, 0, 600, 170, "wall");
+		game.add.tileSprite(0, 170, 600, 180, "wood");
 		
 		keyboardBack = game.add.image(80, 0, "keyboard-back");
+		
+		// In-game screen group
+		screenGroup = game.add.group();
+		screenGroup.x = 87;
+		// Mask to prevent graphics from escaping screen
+		var screenMask = game.make.graphics(0, 0);
+		screenMask.beginFill(0x000000);
+		screenMask.drawRect(87, 0, 378, 181);
+		screenMask.endFill();
+		screenGroup.mask = screenMask;
+		// Background for screen
+		game.add.image(0, 0, "finger", 0, screenGroup);
+		
 		desk3D = game.add.group();
 		
 		keyboard = new Keyboard(desk3D, 87, 190);
@@ -208,35 +235,73 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 			if (Math.random() > 0.6) k.setActive(true);
 		
 		finger = desk3D.create(30, 200, "finger");
-		finger.anchor.set(0.73, 1);
+		finger.anchor.set(0.73, 1.1);
 		finger.update = fingerUpdate;
 		game.physics.enable(finger, Phaser.Physics.ARCADE);
 		finger.body.setSize(15, 6, 64, 159);
 		finger.body.maxVelocity.set(150, 100);
 		finger.body.drag.set(90, 50);
 		finger.movementSpeed = new Phaser.Point(600, 450);
+		finger.isDown = false;
+		finger.overSomething = false;
+		
+		fingerShadow = game.add.image(0, 0, "shadow-small");
+		fingerShadow.anchor.set(0.5, 1);
 		
 		realIn = game.input.keyboard.addKeys({
 			up: Phaser.KeyCode.UP,
 			down: Phaser.KeyCode.DOWN,
 			left: Phaser.KeyCode.LEFT,
 			right: Phaser.KeyCode.RIGHT,
-			interact: Phaser.KeyCode.SPACE,
+			interact: Phaser.KeyCode.SPACEBAR,
 		});
+		
+		game.input.keyboard.addKeyCapture([
+			Phaser.KeyCode.UP,
+			Phaser.KeyCode.DOWN,
+			Phaser.KeyCode.LEFT,
+			Phaser.KeyCode.RIGHT,
+			Phaser.KeyCode.SPACEBAR
+		]);
+		
+		keyDownSound = game.add.audio("keydown");
+		keyUpSound = game.add.audio("keyup");
 	},
 	update: function() {
 		
-		for (var hovered of hover) {
-			hovered.setPressed(false);
-		}
-		hover.length = 0;
 		
-		game.physics.arcade.overlap(finger, keyboard.keys, function(f, k) {
-			k.setPressed(true);
-			hover.push(k);
-		});
+		
+		var keysToUnpress = {};
+		for (var k in keyboard.pushed) {
+			keysToUnpress[k] = keyboard.pushed[k];
+		}
+		
+		finger.overSomething = false;
+		if (finger.isDown) {
+			game.physics.arcade.overlap(finger, keyboard.keys, function(obj, key) {
+				key.setPressed(true);
+				
+				var keyPos = key.x + "," + key.y;
+				keyboard.pushed[keyPos] = key;
+				
+				delete keysToUnpress[keyPos];
+			});
+		} else {
+			game.physics.arcade.overlap(finger, keyboard.keys, function() {
+				finger.overSomething = true;
+			});
+		}
+		
+		for (var k in keysToUnpress) {
+			keysToUnpress[k].setPressed(false);
+			delete keyboard.pushed[k];
+		}
 		
 		desk3D.sort("depth", Phaser.Group.SORT_ASCENDING);
+	},
+	preRender: function() {
+		fingerShadow.x = finger.x;
+		fingerShadow.y = finger.y + (finger.overSomething ? -4 : 0);
 	},
 	render: function() {
 		if (game.showBodies) {
@@ -269,4 +334,14 @@ function fingerUpdate() {
 		dy * this.movementSpeed.y);
 	
 	this.depth = this.y;
+	
+	if (realIn.interact.isDown && !this.isDown) {
+		this.anchor.y = 1;
+		this.isDown = true;
+		fingerShadow.visible = false;
+	} else if (!realIn.interact.isDown && this.isDown) {
+		this.anchor.y = 1.1;
+		this.isDown = false;
+		fingerShadow.visible = true;
+	}
 }
