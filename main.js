@@ -200,7 +200,8 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 			.spritesheet("special-keys", "special-keys.png", 12, 12)
 			.spritesheet("small-font", "small-font.png", 6, 9)
 			.spritesheet("key-y", "key-y.png", 24, 24)
-			.spritesheet("key-g", "key-g.png", 24, 24);
+			.spritesheet("key-g", "key-g.png", 24, 24)
+			.spritesheet("chicken", "chicken.png", 8, 8);
 		
 		game.load.path = "audio/";
 		
@@ -216,17 +217,7 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		
 		keyboardBack = game.add.image(80, 0, "keyboard-back");
 		
-		// In-game screen group
-		screenGroup = game.add.group();
-		screenGroup.x = 87;
-		// Mask to prevent graphics from escaping screen
-		var screenMask = game.make.graphics(0, 0);
-		screenMask.beginFill(0x000000);
-		screenMask.drawRect(87, 0, 378, 181);
-		screenMask.endFill();
-		screenGroup.mask = screenMask;
-		// Background for screen
-		game.add.image(0, 0, "finger", 0, screenGroup);
+		createScreen();
 		
 		desk3D = game.add.group();
 		
@@ -249,19 +240,19 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		fingerShadow.anchor.set(0.5, 1);
 		
 		realIn = game.input.keyboard.addKeys({
-			up: Phaser.KeyCode.UP,
-			down: Phaser.KeyCode.DOWN,
-			left: Phaser.KeyCode.LEFT,
-			right: Phaser.KeyCode.RIGHT,
-			interact: Phaser.KeyCode.SPACEBAR,
+			up: Phaser.KeyCode.W,
+			left: Phaser.KeyCode.A,
+			down: Phaser.KeyCode.S,
+			right: Phaser.KeyCode.D,
+			interact: Phaser.KeyCode.ENTER,
 		});
 		
 		game.input.keyboard.addKeyCapture([
-			Phaser.KeyCode.UP,
-			Phaser.KeyCode.DOWN,
-			Phaser.KeyCode.LEFT,
-			Phaser.KeyCode.RIGHT,
-			Phaser.KeyCode.SPACEBAR
+			Phaser.KeyCode.W,
+			Phaser.KeyCode.A,
+			Phaser.KeyCode.S,
+			Phaser.KeyCode.D,
+			Phaser.KeyCode.ENTER,
 		]);
 		
 		keyDownSound = game.add.audio("keydown");
@@ -344,4 +335,36 @@ function fingerUpdate() {
 		this.isDown = false;
 		fingerShadow.visible = true;
 	}
+}
+
+var chicken;
+function createScreen() {
+	screenGroup = game.add.group();
+	screenGroup.x = 87;
+	screenGroup.y = 1;
+	
+	screenGroup.scale.set(3, 3);
+	
+	// Mask to prevent graphics from escaping screen
+	var screenMask = game.make.graphics(0, 0);
+	screenMask.beginFill(0x000000);
+	screenMask.drawRect(87, 1, 378, 180);
+	screenMask.endFill();
+	screenGroup.mask = screenMask;
+	
+	chicken = game.add.sprite(20, 20, "chicken", 0, screenGroup);
+	chicken.animations.add("stand", [0], 1, true);
+	chicken.animations.add("walk", [0, 1], 4, true);
+	chicken.animations.add("peck", [2, 2, 3, 2, 2, 3,
+		2, 2, 2, 2, 2, 2, 2, 2], 8, true);
+	chicken.animations.add("fall", [4], 1, true);
+	
+	chicken.animations.play("peck");
+	
+	var font = game.add.retroFont("small-font", 6, 9,
+		Phaser.RetroFont.TEXT_SET1, 19);
+	font.autoUpperCase = false;
+	font.text = "Hunt-and-Peck";
+	
+	game.add.image(0, 0, font, 0, screenGroup);
 }
