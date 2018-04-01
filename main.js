@@ -130,10 +130,10 @@ function Keyboard(group, startX, startY, layout, keys) {
 				break;
 			}
 			
-			this.keys.push(
-				group.add(
-					new KeyCap(group.game, xPos, yPos,
-						keyData.width, decal)));
+			var key = group.add(new KeyCap(group.game, xPos, yPos,
+				keyData.width, decal));
+			this.keys.push(key);
+			(this.ids[keyID] || (this.ids[keyID] = [])).push(key);
 			
 			xPos += keyData.width + 2;
 		}
@@ -175,6 +175,110 @@ Keyboard.layouts = {
 			"{290}<D>",
 		],
 	}
+};
+Keyboard.prototype.isDown = function(id) {
+	if (Array.isArray(id)) {
+		for (var i = id.length - 1; i >= 0; i--) {
+			if (this.isDown(id[i])) return true;
+		}
+		return false;
+	}
+	
+	var array = this.ids[id];
+	if (!array) return false;
+	for (var i = array.length - 1; i >= 0; i--) {
+		if (array[i].pressed) return true;
+	}
+	return false;
+};
+Keyboard.prototype.setActive = function(id, active) {
+	if (Array.isArray(id)) {
+		for (var i = id.length - 1; i >= 0; i--) {
+			this.setActive(id[i], active);
+		}
+		return this;
+	}
+	
+	var array = this.ids[id];
+	if (!array) return this;
+	
+	for (var i = array.length - 1; i >= 0; i--) {
+		array[i].setActive(active);
+	}
+	
+	return this;
+};
+
+function InputMultimap() {
+	this.map = {};
+	this.keyUsageCounts = {};
+}
+InputMultimap.prototype.addMapping = function(id, key) {
+	var array = (this.map[id] || (this.map[id] = []));
+	
+	game.input.keyboard.addKeyCapture(key);
+	
+	if (Array.isArray(key)) {
+		for (var i = key.length - 1; i >= 0; i--) {
+			this.keyUsageCounts[key[i]] = (this.keyUsageCounts[key[i]] || 0) + 1;
+		}
+		
+		array.push.apply(array, key);
+	} else {
+		this.keyUsageCounts[key] = (this.keyUsageCounts[key] || 0) + 1;
+		
+		array.push(key);
+	}
+	
+	return this;
+};
+InputMultimap.prototype.removeMapping = function(id, key) {
+	var array = this.map[id];
+	if (!array) return this;
+	
+	if (Array.isArray(key)) {
+		for (var i = key.length - 1; i >= 0; i--) {
+			var keyI = array.indexOf(key[i]);
+			if (keyI < 0) return this;
+			
+			array.splice(keyI, 1);
+			
+			if (--this.keyUsageCounts[key[i]] <= 0) {
+				delete this.keyUsageCounts[key[i]];
+				game.input.keyboard.removeKeyCapture(key);
+			}
+		}
+	} else if (key !== undefined) {
+		var keyI = array.indexOf(key);
+		if (keyI < 0) return this;
+		
+		array.splice(keyI, 1);
+		
+		if (--this.keyUsageCounts[key] <= 0) {
+			delete this.keyUsageCounts[key];
+			game.input.keyboard.removeKeyCapture(key);
+		}
+	} else {
+		for (var i = array.length - 1; i >= 0; i--) {
+			if (--this.keyUsageCounts[array[i]] <= 0) {
+				delete this.keyUsageCounts[array[i]];
+				game.input.keyboard.removeKeyCapture(array[i]);
+			}
+		}
+		delete this.map[id];
+	}
+};
+InputMultimap.prototype.isDown = function(id) {
+	var array = this.map[id];
+	
+	if (!array) return false;
+	
+	for (var i = array.length - 1; i >= 0; i--) {
+		if (game.input.keyboard.isDown(array[i])) {
+			return true;
+		}
+	}
+	return false;
 };
 
 var keyboardBack, desk3D, keyboard, finger, fingerShadow, screenGroup;
@@ -222,8 +326,10 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		desk3D = game.add.group();
 		
 		keyboard = new Keyboard(desk3D, 87, 190);
-		for (var k of keyboard.keys)
-			if (Math.random() > 0.6) k.setActive(true);
+		keyboard.setActive([
+			"w", "a", "s", "d",
+			"^", "<", "D", ">",
+			"E", "_"], true);
 		
 		finger = desk3D.create(30, 200, "finger");
 		finger.anchor.set(0.73, 1.1);
@@ -239,28 +345,22 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		fingerShadow = game.add.image(0, 0, "shadow-small");
 		fingerShadow.anchor.set(0.5, 1);
 		
-		realIn = game.input.keyboard.addKeys({
-			up: Phaser.KeyCode.W,
-			left: Phaser.KeyCode.A,
-			down: Phaser.KeyCode.S,
-			right: Phaser.KeyCode.D,
-			interact: Phaser.KeyCode.ENTER,
-		});
-		
-		game.input.keyboard.addKeyCapture([
-			Phaser.KeyCode.W,
-			Phaser.KeyCode.A,
-			Phaser.KeyCode.S,
-			Phaser.KeyCode.D,
-			Phaser.KeyCode.ENTER,
-		]);
+		realIn = new InputMultimap()
+			.addMapping("up",
+				[Phaser.KeyCode.W, Phaser.KeyCode.UP])
+			.addMapping("left",
+				[Phaser.KeyCode.A, Phaser.KeyCode.LEFT])
+			.addMapping("down",
+				[Phaser.KeyCode.S, Phaser.KeyCode.DOWN])
+			.addMapping("right",
+				[Phaser.KeyCode.D, Phaser.KeyCode.RIGHT])
+			.addMapping("interact",
+				[Phaser.KeyCode.ENTER, Phaser.KeyCode.SPACEBAR]);
 		
 		keyDownSound = game.add.audio("keydown");
 		keyUpSound = game.add.audio("keyup");
 	},
 	update: function() {
-		
-		
 		
 		var keysToUnpress = {};
 		for (var k in keyboard.pushed) {
@@ -291,6 +391,7 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		desk3D.sort("depth", Phaser.Group.SORT_ASCENDING);
 	},
 	preRender: function() {
+		
 		fingerShadow.x = finger.x;
 		fingerShadow.y = finger.y + (finger.overSomething ? -4 : 0);
 	},
@@ -310,10 +411,10 @@ function fingerUpdate() {
 	var dx = 0;
 	var dy = 0;
 	
-	if (realIn.up.isDown) dy -= 1;
-	if (realIn.down.isDown) dy += 1;
-	if (realIn.left.isDown) dx -= 1;
-	if (realIn.right.isDown) dx += 1;
+	if (realIn.isDown("up")) dy -= 1;
+	if (realIn.isDown("down")) dy += 1;
+	if (realIn.isDown("left")) dx -= 1;
+	if (realIn.isDown("right")) dx += 1;
 	
 	if (dx && dy) {
 		dx *= Math.SQRT1_2;
@@ -326,11 +427,12 @@ function fingerUpdate() {
 	
 	this.depth = this.y;
 	
-	if (realIn.interact.isDown && !this.isDown) {
+	var interactPressed = realIn.isDown("interact");
+	if (interactPressed && !this.isDown) {
 		this.anchor.y = 1;
 		this.isDown = true;
 		fingerShadow.visible = false;
-	} else if (!realIn.interact.isDown && this.isDown) {
+	} else if (!interactPressed && this.isDown) {
 		this.anchor.y = 1.1;
 		this.isDown = false;
 		fingerShadow.visible = true;
