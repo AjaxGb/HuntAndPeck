@@ -281,7 +281,7 @@ InputMultimap.prototype.isDown = function(id) {
 	return false;
 };
 
-var keyboardBack, desk3D, keyboard, finger, fingerShadow, screenGroup;
+var keyboardBack, desk3D, keyboard, finger, fingerShadow;
 var fingerBounds = { l: 0, t: 0, r: 600, b: 350 };
 var realIn;
 var keyDownSound, keyUpSound;
@@ -299,19 +299,26 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		game.load
 			.image("finger", "finger.png")
 			.image("keyboard-back", "keyboard-back.png")
+			.image("sky", "sky.png")
 			.image("wood").image("wall").image("shadow-small")
 			.spritesheet("key-font", "key-font.png", 12, 12)
 			.spritesheet("special-keys", "special-keys.png", 12, 12)
 			.spritesheet("small-font", "small-font.png", 6, 9)
 			.spritesheet("key-y", "key-y.png", 24, 24)
 			.spritesheet("key-g", "key-g.png", 24, 24)
-			.spritesheet("chicken", "chicken.png", 8, 8);
+			.spritesheet("chicken", "chicken.png", 8, 8)
+			.spritesheet("tilemap", "tilemap.png", 8, 8);
 		
 		game.load.path = "audio/";
 		
 		game.load
 			.audio("keydown", ["keydown.mp3", "keydown.ogg"])
 			.audio("keyup", ["keyup.mp3", "keyup.ogg"]);
+		
+		game.load.path = "levels/";
+		
+		game.load
+			.tilemap("level1", "level1.json", null, Phaser.Tilemap.TILED_JSON);
 	},
 	create: function() {
 		game.renderer.renderSession.roundPixels = true;
@@ -319,13 +326,13 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		game.add.tileSprite(0, 0, 600, 170, "wall");
 		game.add.tileSprite(0, 170, 600, 180, "wood");
 		
-		keyboardBack = game.add.image(80, 0, "keyboard-back");
+		keyboardBack = game.add.image(77, 0, "keyboard-back");
 		
 		createScreen();
 		
 		desk3D = game.add.group();
 		
-		keyboard = new Keyboard(desk3D, 87, 190);
+		keyboard = new Keyboard(desk3D, 87, 202);
 		keyboard.setActive([
 			"w", "a", "s", "d",
 			"^", "<", "D", ">",
@@ -388,12 +395,15 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 			delete keyboard.pushed[k];
 		}
 		
+		updateScreen();
+		
 		desk3D.sort("depth", Phaser.Group.SORT_ASCENDING);
 	},
 	preRender: function() {
-		
 		fingerShadow.x = finger.x;
 		fingerShadow.y = finger.y + (finger.overSomething ? -4 : 0);
+		
+		renderScreen();
 	},
 	render: function() {
 		if (game.showBodies) {
@@ -401,6 +411,8 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 			for (var k of keyboard.keys) {
 				game.debug.body(k);
 			}
+			game.debug.body(chicken);
+			game.debug.body(terrainLayer);
 		}
 	},
 }, false, false);
@@ -439,34 +451,99 @@ function fingerUpdate() {
 	}
 }
 
-var chicken;
+var screenGroup, screenRT, screenImg, chicken, tilemap, terrainLayer;
 function createScreen() {
 	screenGroup = game.add.group();
-	screenGroup.x = 87;
-	screenGroup.y = 1;
+	screenGroup.visible = false;
 	
-	screenGroup.scale.set(3, 3);
+	screenRT = game.add.renderTexture(128, 64);
+	screenImg = game.add.image(84, 1, screenRT);
+	screenImg.width = 128 * 3;
+	screenImg.height = 64 * 3;
 	
-	// Mask to prevent graphics from escaping screen
-	var screenMask = game.make.graphics(0, 0);
-	screenMask.beginFill(0x000000);
-	screenMask.drawRect(87, 1, 378, 180);
-	screenMask.endFill();
-	screenGroup.mask = screenMask;
+	game.add.image(0, 0, "sky", 0, screenGroup);
 	
-	chicken = game.add.sprite(20, 20, "chicken", 0, screenGroup);
+	tilemap = game.add.tilemap("level1", 8, 8);
+	tilemap.addTilesetImage("tilemap");
+	tilemap.setCollisionBetween(1, 3);
+	
+	terrainLayer = tilemap.createLayer(0, null, null, screenGroup);
+	
+	chicken = game.add.sprite(8 * 3.5, 8 * 4, "chicken", 0, screenGroup);
+	chicken.anchor.set(0.375, 1);
+	
+	game.physics.enable(chicken, Phaser.Physics.ARCADE);
+	chicken.body.setSize(5, 8);
+	chicken.body.gravity.y = 100;
+	chicken.body.linearDamping = 1;
+	
 	chicken.animations.add("stand", [0], 1, true);
-	chicken.animations.add("walk", [0, 1], 4, true);
+	chicken.animations.add("walk", [1, 0], 4, true);
 	chicken.animations.add("peck", [2, 2, 3, 2, 2, 3,
 		2, 2, 2, 2, 2, 2, 2, 2], 8, true);
-	chicken.animations.add("fall", [4], 1, true);
-	
-	chicken.animations.play("peck");
-	
-	var font = game.add.retroFont("small-font", 6, 9,
-		Phaser.RetroFont.TEXT_SET1, 19);
-	font.autoUpperCase = false;
-	font.text = "Hunt-and-Peck";
-	
-	game.add.image(0, 0, font, 0, screenGroup);
+	chicken.animations.add("jump", [4, 0], 1, false);
+	chicken.animations.add("fall", [5], 1, true);
 }
+
+function updateScreen() {
+	game.physics.arcade.collide(chicken, terrainLayer);
+	
+	var inputX = 0;
+	var onGround = chicken.body.blocked.down;
+	
+	if (keyboard.isDown(["a", "<"])) {
+		inputX -= 1;
+	}
+	if (keyboard.isDown(["d", ">"])) {
+		inputX += 1;
+	}
+	
+	chicken.body.velocity.x = inputX * 10;
+	
+	if (keyboard.isDown(["_", "E"]) && onGround) {
+		chicken.body.velocity.y = -40;
+	}
+	
+	// Update animations
+	
+	if (inputX) {
+		var facingRight = chicken.scale.x > 0;
+		var shouldFaceRight = inputX > 0;
+		
+		if (facingRight !== shouldFaceRight) {
+			chicken.scale.x *= -1;
+		}
+	}
+	
+	if (!onGround && chicken.body.velocity.y > 0) {
+		chicken.animations.play("fall");
+	} else if (!onGround && chicken.body.velocity.y < 0) {
+		chicken.animations.play("jump");
+	} else if (inputX) {
+		chicken.animations.play("walk");
+	} else {
+		chicken.animations.play("stand");
+	}
+}
+
+var ROUNDING_ERROR = 0.0000001;
+
+function renderScreen() {
+	
+	var xRound = Math.round(chicken.x);
+	var yRound = Math.round(chicken.y);
+	
+	if (Math.abs(xRound - chicken.x) < ROUNDING_ERROR) {
+		chicken.position.x = xRound;
+	}
+	
+	if (Math.abs(yRound - chicken.y) < ROUNDING_ERROR) {
+		chicken.position.y = yRound;
+	}
+	
+	screenGroup.visible = true;
+	screenRT.renderRawXY(screenGroup, 0, 0);
+	screenGroup.visible = !!game.showBodies;
+}
+
+game.showBodies = true;
