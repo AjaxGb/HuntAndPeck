@@ -297,10 +297,10 @@ var game = new Phaser.Game(600, 350, Phaser.CANVAS, document.body, {
 		game.load.path = "sprites/";
 		
 		game.load
-			.image("finger", "finger.png")
-			.image("keyboard-back", "keyboard-back.png")
-			.image("sky", "sky.png")
-			.image("wood").image("wall").image("shadow-small")
+			.image("finger")
+			.image("keyboard-back")
+			.image("sky").image("wood").image("wall")
+			.image("shadow-small")
 			.spritesheet("key-font", "key-font.png", 12, 12)
 			.spritesheet("special-keys", "special-keys.png", 12, 12)
 			.spritesheet("small-font", "small-font.png", 6, 9)
@@ -546,4 +546,4 @@ function renderScreen() {
 	screenGroup.visible = !!game.showBodies;
 }
 
-game.showBodies = true;
+game.showBodies = false;
